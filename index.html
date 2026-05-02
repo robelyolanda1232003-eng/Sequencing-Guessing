@@ -94,6 +94,7 @@
                 document.getElementById('participantWait').style.display = 'block';
                 syncTimer = setInterval(checkGameStatusFromCloud, 3000);
             }
+            // 每次页面加载都检查一次状态
             checkGameStatusFromCloud();
         }
 
@@ -164,7 +165,7 @@
                 document.getElementById('inputSeq').disabled = true;
                 
             } catch (error) {
-                // 拦截 Bmob 的特定假报错，强行显示成功
+                // 【核心修复补丁】：拦截 Bmob 的特定假报错，强行显示成功
                 if (error && error.message && error.message.includes("Cannot convert undefined or null to object")) {
                     msgEl.style.color = "#27ae60";
                     msgEl.innerText = `🎉 提交成功！数据已安全记录至云端。`;
@@ -239,12 +240,28 @@
                     clearInterval(syncTimer); 
                     const targetSeq = statusRes[0].finalSeq;
                     finalSequence = targetSeq;
+                    
+                    // 隐藏等待文字
                     document.getElementById('participantWait').style.display = 'none';
+                    
+                    // 【新增强化】：在学生手机端瞬间显示开出的最终序列球
+                    const container = document.getElementById('ballsContainer');
+                    container.innerHTML = "";
+                    for (let i = 0; i < targetSeq.length; i++) {
+                        const base = targetSeq[i];
+                        const ball = document.createElement('div');
+                        ball.className = `ball ${base} show`; // 直接加上 show 类名让其瞬间出现
+                        ball.innerText = base;
+                        container.appendChild(ball);
+                    }
+                    
+                    // 拉取数据并展示排行榜
                     await fetchCloudDataAndProcess();
                 }
             } catch (error) {}
         }
 
+        // 大屏幕特有：依次缓慢弹出序列球
         function executeDrawAnimation(targetSeq) {
             document.getElementById('resultSection').style.display = "none";
             const container = document.getElementById('ballsContainer');
