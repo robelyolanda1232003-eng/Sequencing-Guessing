@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>生命科学学院2026本科生毕业典礼 - 序列竞猜</title>
+    <title>生命科学学院2026本科生毕业典礼</title>
     <script src="https://unpkg.com/hydrogen-js-sdk/dist/Bmob-2.5.2.min.js"></script>
     <style>
         :root { --primary-color: #2c3e50; --accent-color: #27ae60; --bg-color: #f4f7f6; --disabled-color: #bdc3c7; }
@@ -13,23 +13,43 @@
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
         input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-family: monospace; }
+        
         button { background-color: var(--accent-color); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; transition: background-color 0.3s; font-weight: bold; }
         button:hover:not(:disabled) { background-color: #219653; }
         button:disabled { background-color: var(--disabled-color); cursor: not-allowed; }
-        .balls-container { display: flex; justify-content: center; gap: 10px; margin: 30px 0; min-height: 60px; }
-        .ball { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #3498db, #2980b9); color: white; font-size: 24px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), 3px 3px 6px rgba(0,0,0,0.2); opacity: 0; transform: scale(0.5); transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
+        /* 修复：彩球容器允许换行 */
+        .balls-container { display: flex; justify-content: center; gap: 10px; margin: 30px 0; min-height: 60px; flex-wrap: wrap; }
+        /* 修复：flex-shrink 防止彩球被挤扁 */
+        .ball { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #3498db, #2980b9); color: white; font-size: 24px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), 3px 3px 6px rgba(0,0,0,0.2); opacity: 0; transform: scale(0.5); transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); flex-shrink: 0; }
         .ball.show { opacity: 1; transform: scale(1); }
         .ball.A { background: linear-gradient(135deg, #e74c3c, #c0392b); }
         .ball.T { background: linear-gradient(135deg, #f1c40f, #f39c12); }
         .ball.C { background: linear-gradient(135deg, #2ecc71, #27ae60); }
         .ball.G { background: linear-gradient(135deg, #3498db, #2980b9); }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #ecf0f1; }
-        .seq-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; }
+        /* 修复：强制序列号不换行 */
+        .seq-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; white-space: nowrap; }
         .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
         .tab-btn { background-color: #ecf0f1; color: var(--primary-color); width: auto; }
         .tab-btn.active { background-color: var(--primary-color); color: white; }
+
+        /* 新增：表格防溢出保护壳 */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 10px;
+        }
+
+        /* 新增：手机小屏幕专属优化 */
+        @media screen and (max-width: 500px) {
+            .balls-container { gap: 6px; }
+            .ball { width: 34px; height: 34px; font-size: 18px; }
+        }
     </style>
 </head>
 <body>
@@ -40,7 +60,10 @@
         <h2>自定义序列提交</h2>
         <div class="form-group"><label>姓名</label><input type="text" id="inputName"></div>
         <div class="form-group"><label>学号/工号</label><input type="text" id="inputId"></div>
-        <div class="form-group"><label>自定义 ssDNA (严格 9nt)</label><input type="text" id="inputSeq" maxlength="9" style="text-transform: uppercase;"></div>
+        <div class="form-group">
+            <label>自定义 ssDNA (严格 9nt)</label>
+            <input type="text" id="inputSeq" maxlength="9" style="text-transform: uppercase;" placeholder="例如：GCGTATGCG">
+        </div>
         <button id="submitBtn" onclick="submitSequence()">提交我的序列</button>
         <p id="submitMsg" style="text-align: center; margin-top: 10px; font-weight: bold; word-break: break-all;"></p>
     </div>
@@ -66,10 +89,12 @@
             <button class="tab-btn active" onclick="switchTab('high')" id="tabHigh">最高同源性</button>
             <button class="tab-btn" onclick="switchTab('low')" id="tabLow">最低同源性</button>
         </div>
-        <table id="resultTable">
-            <thead><tr><th>排名</th><th>姓名</th><th>学号/工号</th><th>提交序列</th><th>同源性</th></tr></thead>
-            <tbody id="resultBody"></tbody>
-        </table>
+        <div class="table-responsive">
+            <table id="resultTable">
+                <thead><tr><th>排名</th><th>姓名</th><th>学号/工号</th><th>提交序列</th><th>同源性</th></tr></thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -94,7 +119,6 @@
                 document.getElementById('participantWait').style.display = 'block';
                 syncTimer = setInterval(checkGameStatusFromCloud, 3000);
             }
-            // 每次页面加载都检查一次状态
             checkGameStatusFromCloud();
         }
 
@@ -113,7 +137,6 @@
             btn.innerText = "上传云端中...";
 
             try {
-                // 1. 检查开奖状态
                 let statusRes = [];
                 try {
                     const statusQuery = Bmob.Query('_User');
@@ -130,7 +153,6 @@
                     return;
                 }
 
-                // 2. 防查重机制
                 let existRecord = [];
                 try {
                     const checkQuery = Bmob.Query('_User');
@@ -148,7 +170,6 @@
                     return;
                 }
 
-                // 3. 将序列保存至云端
                 const recordQuery = Bmob.Query('_User');
                 recordQuery.set('username', id);           
                 recordQuery.set('password', '123456');     
@@ -157,7 +178,6 @@
                 recordQuery.set('sequence', seq);          
                 await recordQuery.save();
 
-                // 正常成功展示
                 msgEl.style.color = "#27ae60";
                 msgEl.innerText = `🎉 提交成功！数据已安全记录至云端。`;
                 document.getElementById('inputName').disabled = true;
@@ -165,7 +185,6 @@
                 document.getElementById('inputSeq').disabled = true;
                 
             } catch (error) {
-                // 【核心修复补丁】：拦截 Bmob 的特定假报错，强行显示成功
                 if (error && error.message && error.message.includes("Cannot convert undefined or null to object")) {
                     msgEl.style.color = "#27ae60";
                     msgEl.innerText = `🎉 提交成功！数据已安全记录至云端。`;
@@ -241,27 +260,23 @@
                     const targetSeq = statusRes[0].finalSeq;
                     finalSequence = targetSeq;
                     
-                    // 隐藏等待文字
                     document.getElementById('participantWait').style.display = 'none';
                     
-                    // 【新增强化】：在学生手机端瞬间显示开出的最终序列球
                     const container = document.getElementById('ballsContainer');
                     container.innerHTML = "";
                     for (let i = 0; i < targetSeq.length; i++) {
                         const base = targetSeq[i];
                         const ball = document.createElement('div');
-                        ball.className = `ball ${base} show`; // 直接加上 show 类名让其瞬间出现
+                        ball.className = `ball ${base} show`; 
                         ball.innerText = base;
                         container.appendChild(ball);
                     }
                     
-                    // 拉取数据并展示排行榜
                     await fetchCloudDataAndProcess();
                 }
             } catch (error) {}
         }
 
-        // 大屏幕特有：依次缓慢弹出序列球
         function executeDrawAnimation(targetSeq) {
             document.getElementById('resultSection').style.display = "none";
             const container = document.getElementById('ballsContainer');
