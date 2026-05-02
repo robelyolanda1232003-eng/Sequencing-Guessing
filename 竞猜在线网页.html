@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生命科学学院2026本科生毕业典礼 - 序列竞猜</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #27ae60;
+            --bg-color: #f4f7f6;
+            --disabled-color: #bdc3c7;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 { text-align: center; }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        
+        /* 表单样式 */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] {
+            width: 100%; padding: 10px; border: 1px solid #ccc;
+            border-radius: 5px; box-sizing: border-box; font-family: monospace;
+        }
+        button {
+            background-color: var(--accent-color); color: white;
+            border: none; padding: 10px 20px; border-radius: 5px;
+            cursor: pointer; font-size: 16px; width: 100%;
+            transition: background-color 0.3s;
+            font-weight: bold;
+        }
+        button:hover:not(:disabled) { background-color: #219653; }
+        button:disabled { background-color: var(--disabled-color); cursor: not-allowed; }
+        
+        /* 抽奖球样式 */
+        .balls-container {
+            display: flex; justify-content: center; gap: 10px;
+            margin: 30px 0; min-height: 60px;
+        }
+        .ball {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white; font-size: 24px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), 3px 3px 6px rgba(0,0,0,0.2);
+            opacity: 0; transform: scale(0.5);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .ball.show { opacity: 1; transform: scale(1); }
+        .ball.A { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .ball.T { background: linear-gradient(135deg, #f1c40f, #f39c12); }
+        .ball.C { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .ball.G { background: linear-gradient(135deg, #3498db, #2980b9); }
+
+        /* 表格样式 */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #ecf0f1; }
+        .seq-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; }
+        
+        /* 标签页切换 */
+        .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
+        .tab-btn { background-color: #ecf0f1; color: var(--primary-color); width: auto; }
+        .tab-btn.active { background-color: var(--primary-color); color: white; }
+    </style>
+</head>
+<body>
+
+    <h1>🧬 序列竞猜大挑战</h1>
+
+    <div class="card">
+        <h2>自定义序列提交</h2>
+        <div class="form-group">
+            <label>姓名</label>
+            <input type="text" id="inputName" placeholder="输入姓名">
+        </div>
+        <div class="form-group">
+            <label>学号/工号</label>
+            <input type="text" id="inputId" placeholder="输入学号或工号">
+        </div>
+        <div class="form-group">
+            <label>自定义 ssDNA (严格 9nt)</label>
+            <input type="text" id="inputSeq" placeholder="例如：ATCGATCGT" maxlength="9" style="text-transform: uppercase;">
+        </div>
+        <button id="submitBtn" onclick="submitSequence()">提交我的序列</button>
+        <p id="submitMsg" style="text-align: center; margin-top: 10px; font-weight: bold;"></p>
+    </div>
+
+    <div class="card">
+        <h2>现场最终序列开奖</h2>
+        <button id="drawBtn" onclick="startDraw()">🎲 读取时间状态中...</button>
+        <div class="balls-container" id="ballsContainer">
+            </div>
+    </div>
+
+    <div class="card" id="resultSection" style="display: none;">
+        <h2>比对排行榜</h2>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('high')" id="tabHigh">最高同源性 (一轮获奖)</button>
+            <button class="tab-btn" onclick="switchTab('low')" id="tabLow">最低同源性 (二轮获奖)</button>
+        </div>
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>姓名</th>
+                    <th>学号/工号</th>
+                    <th>提交序列</th>
+                    <th>同源性</th>
+                </tr>
+            </thead>
+            <tbody id="resultBody">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        // --- 核心配置：时间轴控制 ---
+        const OPEN_DATE = new Date('2026-06-18T00:00:00');   // 开奖时间：6月18日
+        const PHASE1_START = new Date('2026-06-01T00:00:00'); // 第一轮收集开始
+        const PHASE2_START = new Date('2026-06-10T00:00:00'); // 第二轮收集开始
+
+        // 预设测试数据库 (包含 Junyi 和测试用例)
+        let database = [
+            { name: "Junyi", id: "2026001", seq: "ATCGATCGT" },
+            { name: "韩梅梅", id: "2026002", seq: "CTTATGGAG" },
+            { name: "李雷", id: "2026003", seq: "AAAAAAAAA" },
+            { name: "王大锤", id: "2026004", seq: "GCGCGCGCG" }
+        ];
+
+        let finalSequence = "";
+        let currentResults = [];
+        let countdownTimer = null;
+
+        // --- 页面初始化与时间锁控制 ---
+        function initPage() {
+            const now = new Date();
+            const drawBtn = document.getElementById('drawBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            const msgEl = document.getElementById('submitMsg');
+
+            // 1. 提交权限控制
+            if (now < PHASE1_START) {
+                submitBtn.disabled = true;
+                msgEl.style.color = "#e74c3c";
+                msgEl.innerText = "⏳ 活动尚未开始，第一轮自定义将于 6月1日 开放。";
+            } else if (now >= OPEN_DATE) {
+                submitBtn.disabled = true;
+                msgEl.style.color = "#e74c3c";
+                msgEl.innerText = "🛑 序列收集已结束，请期待毕业典礼现场开奖！";
+            } else {
+                submitBtn.disabled = false;
+                msgEl.style.color = "#27ae60";
+                if (now >= PHASE2_START) {
+                    msgEl.innerText = "✅ 第二轮序列收集中 (取同源性最低者获奖)";
+                } else {
+                    msgEl.innerText = "✅ 第一轮序列收集中 (取同源性最高者获奖)";
+                }
+            }
+
+            // 2. 开奖倒计时控制
+            if (now < OPEN_DATE) {
+                drawBtn.disabled = true;
+                updateCountdown(); // 立即执行一次
+                countdownTimer = setInterval(updateCountdown, 1000);
+            } else {
+                drawBtn.disabled = false;
+                drawBtn.innerText = "🎲 开始现场大屏摇号";
+            }
+        }
+
+        // --- 倒计时更新逻辑 ---
+        function updateCountdown() {
+            const now = new Date();
+            const diff = OPEN_DATE - now;
+            
+            if (diff <= 0) {
+                clearInterval(countdownTimer);
+                const btn = document.getElementById('drawBtn');
+                btn.disabled = false;
+                btn.innerText = "🎲 开始现场大屏摇号";
+                return;
+            }
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24).toString().padStart(2, '0');
+            const mins = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
+            const secs = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+            
+            document.getElementById('drawBtn').innerText = `🔒 距离开奖还有: ${days}天 ${hours}时 ${mins}分 ${secs}秒`;
+        }
+
+        // --- 提交序列逻辑 ---
+        function submitSequence() {
+            const name = document.getElementById('inputName').value.trim();
+            const id = document.getElementById('inputId').value.trim();
+            let seq = document.getElementById('inputSeq').value.trim().toUpperCase();
+            const msgEl = document.getElementById('submitMsg');
+
+            if (!name || !id || !seq) {
+                alert("请完整填写所有信息！"); return;
+            }
+            if (seq.length !== 9 || !/^[ATCG]+$/.test(seq)) {
+                alert("序列必须是严格的 9nt 长度，且只能包含 A, T, C, G！"); return;
+            }
+
+            database.push({ name, id, seq });
+            msgEl.style.color = "#27ae60";
+            msgEl.innerText = `🎉 提交成功！当前后台已收集 ${database.length} 条序列。`;
+            
+            document.getElementById('inputName').value = '';
+            document.getElementById('inputId').value = '';
+            document.getElementById('inputSeq').value = '';
+        }
+
+        // --- 模拟开奖逻辑 ---
+        function startDraw() {
+            const btn = document.getElementById('drawBtn');
+            btn.disabled = true;
+            btn.innerText = "开奖中，请注视大屏幕...";
+            document.getElementById('resultSection').style.display = "none";
+            
+            const container = document.getElementById('ballsContainer');
+            container.innerHTML = "";
+            finalSequence = "";
+
+            // 预设开奖序列，用于演示同源性算法的优越性 (对应韩梅梅的测试数据)
+            const targetSeq = "GCTTATGGA"; 
+            
+            let i = 0;
+            const drawInterval = setInterval(() => {
+                if (i >= 9) {
+                    clearInterval(drawInterval);
+                    btn.innerText = "✅ 开奖完毕";
+                    processResults(); // 开奖完毕后立即处理比对
+                    return;
+                }
+
+                const base = targetSeq[i];
+                finalSequence += base;
+                
+                const ball = document.createElement('div');
+                ball.className = `ball ${base}`;
+                ball.innerText = base;
+                container.appendChild(ball);
+                
+                // 触发 CSS 弹性动画
+                setTimeout(() => ball.classList.add('show'), 50);
+                i++;
+            }, 800); // 0.8秒弹出一个球，营造紧张感
+        }
+
+        // --- Levenshtein 编辑距离算法 (同源性核心) ---
+        function getLevenshteinDistance(a, b) {
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+            for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1, // 替换
+                            matrix[i][j - 1] + 1,     // 插入
+                            matrix[i - 1][j] + 1      // 缺失
+                        );
+                    }
+                }
+            }
+            return matrix[b.length][a.length];
+        }
+
+        // --- 处理比对结果 ---
+        function processResults() {
+            currentResults = database.map(user => {
+                const distance = getLevenshteinDistance(finalSequence, user.seq);
+                const similarity = ((9 - distance) / 9) * 100; // 转化为百分比
+                return { ...user, homology: similarity };
+            });
+            document.getElementById('resultSection').style.display = "block";
+            switchTab('high'); // 默认展示一轮获奖者(最高同源)
+        }
+
+        // --- 切换排行榜标签 ---
+        function switchTab(type) {
+            document.getElementById('tabHigh').classList.remove('active');
+            document.getElementById('tabLow').classList.remove('active');
+            
+            if (type === 'high') {
+                document.getElementById('tabHigh').classList.add('active');
+                currentResults.sort((a, b) => b.homology - a.homology);
+            } else {
+                document.getElementById('tabLow').classList.add('active');
+                currentResults.sort((a, b) => a.homology - b.homology);
+            }
+            renderTable();
+        }
+
+        // --- 渲染表格 ---
+        function renderTable() {
+            const tbody = document.getElementById('resultBody');
+            tbody.innerHTML = "";
+            currentResults.forEach((user, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${user.name}</td>
+                    <td>${user.id}</td>
+                    <td class="seq-font">${user.seq}</td>
+                    <td><b>${user.homology.toFixed(2)}%</b></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 页面加载完毕后执行初始化
+        window.onload = initPage;
+
+    </script>
+</body>
+</html>
