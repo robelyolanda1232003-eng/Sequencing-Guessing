@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>生命科学学院2026本科生毕业典礼 - 序列竞猜</title>
-    <script src="https://imgcache.qq.com/qcloud/cloudbase-js-sdk/1.7.0/cloudbase.full.js"></script>
+    <script src="https://unpkg.com/hydrogen-js-sdk/dist/Bmob-2.5.2.min.js"></script>
     <style>
         :root { --primary-color: #2c3e50; --accent-color: #27ae60; --bg-color: #f4f7f6; --disabled-color: #bdc3c7; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--primary-color); max-width: 800px; margin: 0 auto; padding: 20px; }
@@ -41,7 +41,7 @@
         <div class="form-group"><label>姓名</label><input type="text" id="inputName"></div>
         <div class="form-group"><label>学号/工号</label><input type="text" id="inputId"></div>
         <div class="form-group"><label>自定义 ssDNA (严格 9nt)</label><input type="text" id="inputSeq" maxlength="9" style="text-transform: uppercase;"></div>
-        <button id="submitBtn" onclick="submitSequence()" disabled>系统初始化中...</button>
+        <button id="submitBtn" onclick="submitSequence()">提交我的序列</button>
         <p id="submitMsg" style="text-align: center; margin-top: 10px; font-weight: bold;"></p>
     </div>
 
@@ -49,13 +49,13 @@
         <h2>现场最终序列开奖</h2>
         
         <div id="adminControls" style="display: none;">
-            <p id="adminStatus" style="color:#2980b9; font-weight:bold;">正在连接腾讯云数据库...</p>
+            <p id="adminStatus" style="color:#2980b9; font-weight:bold;">正在连接 Bmob 云端数据库...</p>
             <button id="drawBtn" onclick="adminStartDraw()" disabled>🎲 读取云端数据并开奖</button>
             <button onclick="resetCloudData()" style="background-color: #e74c3c; margin-top: 10px;">⚠️ 重置云端所有数据(测试用)</button>
         </div>
         
         <div id="participantWait" style="text-align: center; color: #e74c3c; font-weight: bold;">
-            <p id="waitText">⏳ 序列将加密上传至腾讯云。请留意现场大屏幕，开奖后将同步结果...</p>
+            <p id="waitText">⏳ 序列将加密上传至云端。请留意现场大屏幕，开奖后将同步结果...</p>
         </div>
 
         <div class="balls-container" id="ballsContainer"></div>
@@ -75,13 +75,9 @@
 
     <script>
         // ==========================================
-        // ⚠️ 极其重要：在这里填入你的腾讯云开发 环境ID
+        // ⚠️ 已经填入你的 Bmob 密钥
         // ==========================================
-        const app = cloudbase.init({
-           env: 'tsuma01-d9gkvyqmsc001e482' // 例如: bio-lottery-1a2b3c4d
-        });
-        const auth = app.auth();
-        const db = app.database();
+        Bmob.initialize("09e593fe93bdd646", "20040716");
         // ==========================================
 
         let currentResults = [];
@@ -89,35 +85,26 @@
         let syncTimer = null;
         let isAdmin = false;
 
-        // --- 页面初始化与匿名登录 ---
-        async function initPage() {
-            try {
-                // 腾讯云开发要求必须先进行匿名登录才能操作数据库
-                await auth.anonymousAuthProvider().signIn();
-                document.getElementById('submitBtn').innerText = "提交我的序列";
-                document.getElementById('submitBtn').disabled = false;
-                
-                const urlParams = new URLSearchParams(window.location.search);
-                isAdmin = urlParams.get('admin') === 'true';
+        // --- 页面初始化 ---
+        function initPage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            isAdmin = urlParams.get('admin') === 'true';
 
-                if (isAdmin) {
-                    document.getElementById('adminControls').style.display = 'block';
-                    document.getElementById('participantWait').style.display = 'none';
-                    checkAdminStatus();
-                } else {
-                    document.getElementById('adminControls').style.display = 'none';
-                    document.getElementById('participantWait').style.display = 'block';
-                    syncTimer = setInterval(checkGameStatusFromCloud, 3000);
-                }
-                
-                checkGameStatusFromCloud();
-            } catch (error) {
-                document.getElementById('submitBtn').innerText = "云服务连接失败";
-                alert("初始化失败，请确保云开发控制台已开启【匿名登录】。错误信息: " + error.message);
+            if (isAdmin) {
+                document.getElementById('adminControls').style.display = 'block';
+                document.getElementById('participantWait').style.display = 'none';
+                checkAdminStatus();
+            } else {
+                document.getElementById('adminControls').style.display = 'none';
+                document.getElementById('participantWait').style.display = 'block';
+                // 学生端开启云端轮询监听，每 3 秒检查一次是否开奖
+                syncTimer = setInterval(checkGameStatusFromCloud, 3000);
             }
+            
+            checkGameStatusFromCloud();
         }
 
-        // --- 学生提交数据 ---
+        // --- 学生提交数据到云端 ---
         async function submitSequence() {
             const name = document.getElementById('inputName').value.trim();
             const id = document.getElementById('inputId').value.trim();
@@ -133,9 +120,11 @@
             btn.innerText = "上传云端中...";
 
             try {
-                // 1. 检查开奖状态
-                const statusRes = await db.collection('GameStatus').where({ key: 'main' }).get();
-                if (statusRes.data.length > 0 && statusRes.data[0].isFinished) {
+                // 1. 检查是否已经开奖
+                const statusQuery = Bmob.Query('GameStatus');
+                statusQuery.equalTo('key', '==', 'main');
+                const statusRes = await statusQuery.find();
+                if (statusRes.length > 0 && statusRes[0].isFinished) {
                     msgEl.style.color = "#e74c3c";
                     msgEl.innerText = "🛑 开奖已启动，提交通道已关闭！";
                     btn.innerText = "提交通道关闭";
@@ -143,8 +132,10 @@
                 }
 
                 // 2. 防查重
-                const checkRes = await db.collection('SequenceData').where({ studentId: id }).get();
-                if (checkRes.data.length > 0) {
+                const checkQuery = Bmob.Query('SequenceData');
+                checkQuery.equalTo('studentId', '==', id);
+                const existRecord = await checkQuery.find();
+                if (existRecord.length > 0) {
                     msgEl.style.color = "#e74c3c";
                     msgEl.innerText = "🛑 该学号/工号已提交过，每人仅限一次！";
                     btn.disabled = false;
@@ -152,16 +143,15 @@
                     return;
                 }
 
-                // 3. 写入数据库
-                await db.collection('SequenceData').add({
-                    name: name,
-                    studentId: id,
-                    sequence: seq,
-                    timestamp: db.serverDate()
-                });
+                // 3. 保存到 Bmob 云端
+                const recordQuery = Bmob.Query('SequenceData');
+                recordQuery.set('name', name);
+                recordQuery.set('studentId', id);
+                recordQuery.set('sequence', seq);
+                await recordQuery.save();
 
                 msgEl.style.color = "#27ae60";
-                msgEl.innerText = `🎉 提交成功！序列已接入腾讯云。`;
+                msgEl.innerText = `🎉 提交成功！数据已安全记录至云端。`;
                 document.getElementById('inputName').disabled = true;
                 document.getElementById('inputId').disabled = true;
                 document.getElementById('inputSeq').disabled = true;
@@ -169,7 +159,7 @@
             } catch (error) {
                 console.error("提交失败:", error);
                 msgEl.style.color = "#e74c3c";
-                msgEl.innerText = "❌ 权限或网络错误，提交失败。请检查数据库读写权限。";
+                msgEl.innerText = "❌ 网络错误，提交失败，请重试。";
                 btn.disabled = false;
                 btn.innerText = "提交我的序列";
             }
@@ -178,11 +168,12 @@
         // --- 管理员检查当前云端人数 ---
         async function checkAdminStatus() {
             try {
-                const countRes = await db.collection('SequenceData').count();
-                document.getElementById('adminStatus').innerText = `✅ 腾讯云已连接。当前总计收集: ${countRes.total} 条序列`;
+                const countQuery = Bmob.Query('SequenceData');
+                const count = await countQuery.count();
+                document.getElementById('adminStatus').innerText = `✅ 云端已连接。当前总计收集: ${count} 条序列`;
                 document.getElementById('drawBtn').disabled = false;
             } catch (error) {
-                document.getElementById('adminStatus').innerText = `❌ 连接失败，请检查数据库权限是否正确设置。`;
+                document.getElementById('adminStatus').innerText = `❌ 连接失败，请检查密钥是否正确填写。`;
                 document.getElementById('adminStatus').style.color = "red";
             }
         }
@@ -196,23 +187,27 @@
             const targetSeq = "GCTTATGGA"; // 开奖最终序列
 
             try {
-                // 更新云端开奖状态
-                const statusRes = await db.collection('GameStatus').where({ key: 'main' }).get();
-                if (statusRes.data.length === 0) {
-                    await db.collection('GameStatus').add({
-                        key: 'main',
-                        isFinished: true,
-                        finalSeq: targetSeq
-                    });
+                const statusQuery = Bmob.Query('GameStatus');
+                statusQuery.equalTo('key', '==', 'main');
+                const statusRes = await statusQuery.find();
+                
+                if (statusRes.length === 0) {
+                    const newStatus = Bmob.Query('GameStatus');
+                    newStatus.set('key', 'main');
+                    newStatus.set('isFinished', true);
+                    newStatus.set('finalSeq', targetSeq);
+                    await newStatus.save();
                 } else {
-                    await db.collection('GameStatus').doc(statusRes.data[0]._id).update({
-                        isFinished: true,
-                        finalSeq: targetSeq
-                    });
+                    const updateStatus = Bmob.Query('GameStatus');
+                    updateStatus.set('id', statusRes[0].objectId); // Bmob 更新需要传入主键
+                    updateStatus.set('isFinished', true);
+                    updateStatus.set('finalSeq', targetSeq);
+                    await updateStatus.save();
                 }
 
                 // 本地执行动画
                 executeDrawAnimation(targetSeq);
+                
             } catch (error) {
                 alert("控制云端状态失败：" + error.message);
                 btn.disabled = false;
@@ -222,11 +217,13 @@
         // --- 学生手机轮询云端状态 ---
         async function checkGameStatusFromCloud() {
             try {
-                const statusRes = await db.collection('GameStatus').where({ key: 'main' }).get();
+                const statusQuery = Bmob.Query('GameStatus');
+                statusQuery.equalTo('key', '==', 'main');
+                const statusRes = await statusQuery.find();
                 
-                if (statusRes.data.length > 0 && statusRes.data[0].isFinished && finalSequence === "") {
+                if (statusRes.length > 0 && statusRes[0].isFinished && finalSequence === "") {
                     clearInterval(syncTimer); 
-                    const targetSeq = statusRes.data[0].finalSeq;
+                    const targetSeq = statusRes[0].finalSeq;
                     finalSequence = targetSeq;
                     document.getElementById('participantWait').style.display = 'none';
                     await fetchCloudDataAndProcess();
@@ -236,7 +233,7 @@
             }
         }
 
-        // --- 开奖动画逻辑 (大屏展示) ---
+        // --- 开奖动画逻辑 ---
         function executeDrawAnimation(targetSeq) {
             document.getElementById('resultSection').style.display = "none";
             const container = document.getElementById('ballsContainer');
@@ -266,10 +263,11 @@
         // --- 拉取数据与比对 ---
         async function fetchCloudDataAndProcess() {
             try {
-                const res = await db.collection('SequenceData').limit(1000).get();
-                const allUsers = res.data;
+                const query = Bmob.Query('SequenceData');
+                query.limit(1000); 
+                const results = await query.find();
 
-                currentResults = allUsers.map(user => {
+                currentResults = results.map(user => {
                     const distance = getLevenshteinDistance(finalSequence, user.sequence);
                     return { 
                         name: user.name, 
@@ -322,20 +320,27 @@
 
         // --- 调试工具：重置数据 ---
         async function resetCloudData() {
-            if (!confirm("⚠️ 确定要清空云端的所有数据吗？（注：由于腾讯云 SDK 限制，前端批量删除权限较严，此功能可能因权限被拒，推荐直接在云控制台操作删除）")) return;
+            if (!confirm("⚠️ 确定要清空云端的所有数据吗？")) return;
             try {
-                // 腾讯云开发前端匿名环境通常没有直接清空集合的权限
-                // 这里提供单条尝试删除的逻辑，最稳妥的是去控制台手动清空数据
-                const statusRes = await db.collection('GameStatus').get();
-                for(let item of statusRes.data) { await db.collection('GameStatus').doc(item._id).remove(); }
+                const statusQuery = Bmob.Query('GameStatus');
+                const statuses = await statusQuery.find();
+                for (let s of statuses) {
+                    const delQuery = Bmob.Query('GameStatus');
+                    await delQuery.destroy(s.objectId);
+                }
                 
-                const dataRes = await db.collection('SequenceData').get();
-                for(let item of dataRes.data) { await db.collection('SequenceData').doc(item._id).remove(); }
+                const dataQuery = Bmob.Query('SequenceData');
+                dataQuery.limit(1000);
+                const datas = await dataQuery.find();
+                for (let d of datas) {
+                    const delData = Bmob.Query('SequenceData');
+                    await delData.destroy(d.objectId);
+                }
                 
-                alert("云端数据已尝试清空！页面将刷新。");
+                alert("云端数据已清空！页面将刷新。");
                 location.reload();
             } catch(e) {
-                alert("清空失败，出于安全机制，请登录腾讯云开发控制台，在【数据库】后台直接全选并删除数据。");
+                alert("清空失败：" + e.message);
             }
         }
 
