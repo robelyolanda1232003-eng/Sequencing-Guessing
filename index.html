@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>生命科学学院2026本科生毕业典礼</title>
+    <title>生命科学学院2026届本科生毕业典礼 - 序列竞猜</title>
     <script src="https://unpkg.com/hydrogen-js-sdk/dist/Bmob-2.5.2.min.js"></script>
     <style>
         :root { --primary-color: #2c3e50; --accent-color: #27ae60; --bg-color: #f4f7f6; --disabled-color: #bdc3c7; }
@@ -18,9 +18,7 @@
         button:hover:not(:disabled) { background-color: #219653; }
         button:disabled { background-color: var(--disabled-color); cursor: not-allowed; }
         
-        /* 修复：彩球容器允许换行 */
         .balls-container { display: flex; justify-content: center; gap: 10px; margin: 30px 0; min-height: 60px; flex-wrap: wrap; }
-        /* 修复：flex-shrink 防止彩球被挤扁 */
         .ball { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #3498db, #2980b9); color: white; font-size: 24px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: inset -3px -3px 6px rgba(0,0,0,0.2), 3px 3px 6px rgba(0,0,0,0.2); opacity: 0; transform: scale(0.5); transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); flex-shrink: 0; }
         .ball.show { opacity: 1; transform: scale(1); }
         .ball.A { background: linear-gradient(135deg, #e74c3c, #c0392b); }
@@ -31,13 +29,11 @@
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #ecf0f1; }
-        /* 修复：强制序列号不换行 */
         .seq-font { font-family: 'Courier New', Courier, monospace; letter-spacing: 1px; white-space: nowrap; }
         .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
         .tab-btn { background-color: #ecf0f1; color: var(--primary-color); width: auto; }
         .tab-btn.active { background-color: var(--primary-color); color: white; }
 
-        /* 新增：表格防溢出保护壳 */
         .table-responsive {
             width: 100%;
             overflow-x: auto;
@@ -45,7 +41,17 @@
             margin-top: 10px;
         }
 
-        /* 新增：手机小屏幕专属优化 */
+        /* 底部声明提示样式 */
+        .notice-text {
+            font-size: 13px;
+            color: #7f8c8d;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px dashed #ecf0f1;
+            line-height: 1.6;
+        }
+
         @media screen and (max-width: 500px) {
             .balls-container { gap: 6px; }
             .ball { width: 34px; height: 34px; font-size: 18px; }
@@ -61,11 +67,16 @@
         <div class="form-group"><label>姓名</label><input type="text" id="inputName"></div>
         <div class="form-group"><label>学号/工号</label><input type="text" id="inputId"></div>
         <div class="form-group">
-            <label>自定义 ssDNA (严格 9nt)</label>
+            <label>自定义 ssDNA (9nt)</label>
             <input type="text" id="inputSeq" maxlength="9" style="text-transform: uppercase;" placeholder="例如：GCGTATGCG">
         </div>
         <button id="submitBtn" onclick="submitSequence()">提交我的序列</button>
         <p id="submitMsg" style="text-align: center; margin-top: 10px; font-weight: bold; word-break: break-all;"></p>
+        
+        <div class="notice-text">
+            ⚠️ 本竞猜结果仅用作毕业典礼抽奖活动，请勿用作其他用途！<br>
+            如有问题或需重新提交序列，请联系管理员：<b>15773058279（甘）</b>。
+        </div>
     </div>
 
     <div class="card">
@@ -77,17 +88,17 @@
         </div>
         
         <div id="participantWait" style="text-align: center; color: #e74c3c; font-weight: bold;">
-            <p id="waitText">⏳ 序列将加密上传至云端。请留意现场大屏幕，开奖后将同步结果...</p>
+            <p id="waitText">⏳ 请留意现场大屏幕，开奖后将同步结果...</p>
         </div>
 
         <div class="balls-container" id="ballsContainer"></div>
     </div>
 
     <div class="card" id="resultSection" style="display: none;">
-        <h2>同源性排行榜</h2>
+        <h2>两轮获奖排行榜</h2>
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('high')" id="tabHigh">最高同源性</button>
-            <button class="tab-btn" onclick="switchTab('low')" id="tabLow">最低同源性</button>
+            <button class="tab-btn active" onclick="switchTab('high')" id="tabHigh">第一轮获奖：最高同源性</button>
+            <button class="tab-btn" onclick="switchTab('low')" id="tabLow">第二轮获奖：最低同源性</button>
         </div>
         <div class="table-responsive">
             <table id="resultTable">
